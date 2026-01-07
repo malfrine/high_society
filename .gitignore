@@ -1,0 +1,38 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ML/RL experiment results
+experiments/results/
+*.pt
+*.pth
+*.h5
+*.pkl
+*.pickle
+
+# Tensorboard logs
+runs/
+logs/
+tensorboard/
+
+# Model checkpoints
+checkpoints/
+*.ckpt
+
+# Data files
+data/
+*.csv
+*.json
+!experiments/configs/*.json
+!experiments/configs/*.yaml
