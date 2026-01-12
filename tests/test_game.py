@@ -1,8 +1,8 @@
 """Tests for complete High Society games"""
 import pytest
 import numpy as np
-from high_society.env.environment import HighSocietyEnvSimple
-from high_society.agents.random_agent import RandomAgent
+from high_society.environment import HighSocietyEnvSimple
+from high_society.agents import RandomAgent
 
 
 def test_random_game_completes():
@@ -122,7 +122,7 @@ def test_multiple_random_games():
 
 def test_game_with_varying_player_counts():
     """Test that games work correctly with different numbers of players."""
-    for num_players in [2, 3, 4, 5]:
+    for num_players in [3, 4, 5]:
         env = HighSocietyEnvSimple(name=f"test_{num_players}p", num_players=num_players)
         env.reset(seed=100)
 

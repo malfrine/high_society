@@ -1,6 +1,8 @@
-"""Random agent that makes random valid bids in auctions"""
 import numpy as np
 from typing import Any
+import torch
+import torch.nn as nn
+from high_society.networks import build_mlp
 
 
 class RandomAgent:
@@ -49,3 +51,15 @@ class RandomAgent:
         bid_amount = self.rng.uniform(min_bid, max_bid)
 
         return np.array([bid_amount])
+
+class VanillaPGAgent:
+    """An agent that uses the REINFORCE algorithm to learn a policy."""
+
+    def __init__(self, player_id: int, state_dim: int, action_dim: int):
+        self.player_id = player_id
+        self.mean_net = build_mlp(state_dim, action_dim, 2, 64)
+        self.log_std = nn.Parameter(torch.zeros(action_dim))
+        parameters = list(self.mean_net.parameters()) + [self.log_std]
+        self.optimizer = torch.optim.Adam(parameters, lr=1e-3)
+
+    

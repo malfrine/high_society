@@ -1,7 +1,7 @@
 """Tests for High Society auction mechanics"""
 import pytest
 import numpy as np
-from high_society.env.environment import HighSocietyEnvSimple
+from high_society.environment import HighSocietyEnvSimple
 
 
 def test_auction_round_loops_with_increasing_bids():

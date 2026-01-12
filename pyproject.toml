@@ -1,16 +1,19 @@
 [project]
 name = "high-society-rl"
 version = "0.1.0"
-description = "Add your description here"
+description = "A RL project for the card game High Society"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.9,<3.13"
 dependencies = [
+    "torch>=2.0.0",
     "pettingzoo>=1.25.0",
     "pydantic>=2.12.5",
-    "rlcard>=1.2.0",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.2",
+    "pytest>=7.0.0",
 ]
+
+[tool.uv]
+environments = ["sys_platform == 'darwin' and platform_machine == 'arm64'"]
