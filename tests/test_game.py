@@ -1,8 +1,9 @@
 """Tests for complete High Society games"""
 import pytest
 import numpy as np
-from high_society.environment import HighSocietyEnvSimple
+from high_society.environment import SimpleHighSocietyEnv
 from high_society.agents import RandomAgent
+from high_society.utils import cat_dict_array
 
 
 def test_random_game_completes():
@@ -15,14 +16,15 @@ def test_random_game_completes():
     - Rewards are assigned correctly (eliminated players get 0)
     - Winner has highest prestige among non-eliminated players
     """
-    env = HighSocietyEnvSimple(name="test", num_players=3)
+    env = SimpleHighSocietyEnv(num_players=3)
     env.reset(seed=42)
 
+    obs_space = env.observation_space("player_0")
     # Create random agents with different strategies
     agents = [
-        RandomAgent(player_id=0, pass_probability=0.3, seed=42),  # Aggressive
-        RandomAgent(player_id=1, pass_probability=0.5, seed=43),  # Balanced
-        RandomAgent(player_id=2, pass_probability=0.7, seed=44),  # Conservative
+        RandomAgent(player_id=0, obs_space=obs_space, pass_probability=0.3, seed=42),  # Aggressive
+        RandomAgent(player_id=1, obs_space=obs_space, pass_probability=0.5, seed=43),  # Balanced
+        RandomAgent(player_id=2, obs_space=obs_space, pass_probability=0.7, seed=44),  # Conservative
     ]
 
     step_count = 0
@@ -34,8 +36,8 @@ def test_random_game_completes():
         agent_idx = env.agents.index(agent_name)
         agent = agents[agent_idx]
 
-        obs = env.observe(agent_name)
-        action = agent.get_action(obs)
+        obs = cat_dict_array(env.observe(agent_name))
+        action, _ = agent.get_action(obs)
 
         env.step(action)
         step_count += 1
@@ -89,11 +91,12 @@ def test_multiple_random_games():
     num_games = 10
 
     for game_num in range(num_games):
-        env = HighSocietyEnvSimple(name=f"test_{game_num}", num_players=3)
+        env = SimpleHighSocietyEnv(num_players=3)
         env.reset(seed=game_num)
 
+        obs_space = env.observation_space("player_0")
         agents = [
-            RandomAgent(player_id=i, pass_probability=0.5, seed=game_num * 10 + i)
+            RandomAgent(player_id=i, obs_space=obs_space, pass_probability=0.5, seed=game_num * 10 + i)
             for i in range(3)
         ]
 
@@ -105,8 +108,8 @@ def test_multiple_random_games():
             agent_idx = env.agents.index(agent_name)
             agent = agents[agent_idx]
 
-            obs = env.observe(agent_name)
-            action = agent.get_action(obs)
+            obs = cat_dict_array(env.observe(agent_name))
+            action, _ = agent.get_action(obs)
 
             env.step(action)
             step_count += 1
@@ -123,11 +126,12 @@ def test_multiple_random_games():
 def test_game_with_varying_player_counts():
     """Test that games work correctly with different numbers of players."""
     for num_players in [3, 4, 5]:
-        env = HighSocietyEnvSimple(name=f"test_{num_players}p", num_players=num_players)
+        env = SimpleHighSocietyEnv(num_players=num_players)
         env.reset(seed=100)
 
+        obs_space = env.observation_space("player_0")
         agents = [
-            RandomAgent(player_id=i, pass_probability=0.5, seed=100 + i)
+            RandomAgent(player_id=i, obs_space=obs_space, pass_probability=0.5, seed=100 + i)
             for i in range(num_players)
         ]
 
@@ -139,8 +143,8 @@ def test_game_with_varying_player_counts():
             agent_idx = env.agents.index(agent_name)
             agent = agents[agent_idx]
 
-            obs = env.observe(agent_name)
-            action = agent.get_action(obs)
+            obs = cat_dict_array(env.observe(agent_name))
+            action, _ = agent.get_action(obs)
 
             env.step(action)
             step_count += 1

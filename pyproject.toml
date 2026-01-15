@@ -1,19 +1,50 @@
 [project]
 name = "high-society-rl"
 version = "0.1.0"
-description = "A RL project for the card game High Society"
+description = "Reinforcement learning experiments"
 readme = "README.md"
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "torch>=2.0.0",
+    "torch>=2.5.0",
+    "torchvision>=0.20.0",
+    "numpy>=2.0.0",
+    "gymnasium>=1.0.0",
+    "pytest>=8.0.0",
     "pettingzoo>=1.25.0",
     "pydantic>=2.12.5",
 ]
 
-[dependency-groups]
-dev = [
-    "pytest>=7.0.0",
-]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["high_society"]
+
+# PyTorch configuration for uv
+# macOS: CPU wheels (MPS acceleration is built into these wheels)
+# Linux/Windows: CUDA 12.8 wheels for cloud GPU support
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [tool.uv]
-environments = ["sys_platform == 'darwin' and platform_machine == 'arm64'"]
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchvision = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]

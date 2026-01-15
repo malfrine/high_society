@@ -56,11 +56,13 @@ def get_total_prestige(cards: list[PrestigeCard]) -> float:
 
 
 
-class HighSocietyEnvSimple(AECEnv):
+class SimpleHighSocietyEnv(AECEnv):
 
-    def __init__(self, name: str, num_players: int):
+    def __init__(self, num_players: int):
         super().__init__()
-        self.name = name
+        if not (3 <= num_players <= 5):
+            raise ValueError("Must have between 3 - 5 players")
+        self.name = "simple_high_society"
         self.num_players = num_players
         self.agents = [f"player_{i}" for i in range(num_players)]
         self.possible_agents = self.agents[:]
@@ -68,23 +70,30 @@ class HighSocietyEnvSimple(AECEnv):
         self.observation_spaces = {
             agent: spaces.Dict({
                 "total_prestige": spaces.Box(low=0, high=100, shape=(1,), dtype=np.float32),
-                "remaining_special_cards": spaces.Box(low=1, high=4, shape=(1,), dtype=np.int32),
-                "is_last_round": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int32),
+                "remaining_special_cards": spaces.Box(low=1, high=4, shape=(1,), dtype=np.float32),
+                "is_last_round": spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
                 "remaining_money": spaces.Box(low=0, high=100, shape=(1,), dtype=np.float32),
                 "current_round_bid": spaces.Box(low=0, high=100, shape=(1,), dtype=np.float32),
                 "bids": spaces.Box(low=0, high=100, shape=(num_players,), dtype=np.float32),
                 "current_player_prestige": spaces.Box(low=0, high=100, shape=(num_players,), dtype=np.float32),
                 "potential_player_prestige": spaces.Box(low=0, high=100, shape=(num_players,), dtype=np.float32),
-                "current_round_starter": spaces.Box(low=0, high=1, shape=(num_players,), dtype=np.int32),
-                "next_round_starter": spaces.Box(low=0, high=1, shape=(num_players,), dtype=np.int32),
+                "current_round_starter": spaces.Box(low=0, high=1, shape=(num_players,), dtype=np.float32),
+                "next_round_starter": spaces.Box(low=0, high=1, shape=(num_players,), dtype=np.float32),
             })
             for agent in self.agents
         }
+        # Action is raise_intensity in [0, 1]: 0 = pass, > 0 = raise
         self.action_spaces = {
-            agent: spaces.Box(0, 100, shape=(1,), dtype=np.float32) for agent in self.agents
+            agent: spaces.Box(0, 1, shape=(1,), dtype=np.float32) for agent in self.agents
         }
         
         self.reset()
+
+    def obs_dim(self, agent: str) -> int:
+        return sum(space.shape[0] for space in self.observation_space(agent).values())
+
+    def action_dim(self, agent: str) -> int:
+        return self.action_space(agent).shape[0]
         
     def observation_space(self, agent):
         return self.observation_spaces[agent]
@@ -98,14 +107,19 @@ class HighSocietyEnvSimple(AECEnv):
 
         agent = self.agent_selection
         agent_idx = self.agents.index(agent)
-        bid_amount = float(action[0])
+        raise_intensity = float(action[0])
 
-        # Handle bidding
-        if bid_amount == 0:
-            # Player passes
+        # Convert raise_intensity to bid amount
+        # raise_intensity = 0 -> pass
+        # raise_intensity > 0 -> bid = min_bid + raise_intensity * (available_money - min_bid)
+        if raise_intensity == 0:
             self._handle_pass(agent_idx)
         else:
-            # Player bids
+            auction = self.game_state.cur_round
+            player_state = self.game_state.player_states[agent_idx]
+            available_money = player_state.total_money + auction.bids.get(agent_idx, 0)
+            min_bid = auction.cur_bid + 1
+            bid_amount = min_bid + raise_intensity * (available_money - min_bid)
             self._handle_bid(agent_idx, bid_amount)
 
         # Check if auction round is complete
@@ -139,13 +153,15 @@ class HighSocietyEnvSimple(AECEnv):
         # Initialize AECEnv properties
         self.agents = self.possible_agents[:]
         self._agent_selector = self._create_agent_selector()
-        self.agent_selection = self._agent_selector.reset()
 
         self.rewards = {agent: 0 for agent in self.agents}
         self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
+
+        # Select first agent who can afford to bid
+        self._select_first_valid_agent(self.game_state.round_starter_idx)
 
         return self.observe(self.agent_selection), self.infos[self.agent_selection]
         
@@ -301,21 +317,42 @@ class HighSocietyEnvSimple(AECEnv):
             self.terminations[agent] = True
 
     def _select_next_agent(self):
-        """Select next agent to bid in auction"""
-        auction = self.game_state.cur_round
-
-        # Find next player in round order who hasn't passed
+        """Select next agent to bid in auction."""
         current_idx = self.agents.index(self.agent_selection)
-        for _ in range(self.num_players):
-            current_idx = (current_idx + 1) % self.num_players
-            if current_idx in auction.players_to_bid:
-                self.agent_selection = self.agents[current_idx]
-                return
+        next_idx = (current_idx + 1) % self.num_players
+        self._select_first_valid_agent(next_idx)
 
-        # If no one left, shouldn't happen but handle gracefully
-        if len(auction.players_to_bid) > 0:
-            next_idx = min(auction.players_to_bid)
-            self.agent_selection = self.agents[next_idx]
+    def _select_first_valid_agent(self, start_idx: int):
+        """Select first agent starting from start_idx who can afford min_bid.
+
+        Auto-passes players who can't afford. Handles auction completion
+        and new round setup if needed.
+        """
+        auction = self.game_state.cur_round
+        min_bid = auction.cur_bid + 1
+
+        for i in range(self.num_players):
+            current_idx = (start_idx + i) % self.num_players
+            if current_idx in auction.players_to_bid:
+                player_state = self.game_state.player_states[current_idx]
+                # Include their current bid since they'd get it back to re-bid
+                available_money = player_state.total_money + auction.bids.get(current_idx, 0)
+                if available_money >= min_bid:
+                    self.agent_selection = self.agents[current_idx]
+                    return
+                else:
+                    # Auto-pass for players who can't afford min_bid
+                    self._handle_pass(current_idx)
+
+        # Check if auction ended due to auto-passes
+        if len(auction.players_to_bid) <= 1:
+            self._complete_auction_round()
+            if self._is_game_over():
+                self._calculate_final_scores()
+                return
+            self.game_state.cur_round = self.start_auction_round(self.game_state)
+            # Recursively select for new round
+            self._select_first_valid_agent(self.game_state.round_starter_idx)
 
     def _clear_rewards(self):
         """Clear rewards for all agents"""
@@ -328,12 +365,14 @@ class HighSocietyEnvSimple(AECEnv):
         player_state = self.game_state.player_states[agent_idx]
         auction = self.game_state.cur_round
 
-        # Build observation
+        # Available money includes current bid (returned if they re-bid or pass)
+        available_money = player_state.total_money + auction.bids.get(agent_idx, 0)
+
         obs = {
             "total_prestige": np.array([player_state.total_prestige], dtype=np.float32),
-            "remaining_special_cards": np.array([self.game_state.remaining_special_cards], dtype=np.int32),
-            "is_last_round": np.array([1 if self.game_state.remaining_special_cards == 1 else 0], dtype=np.int32),
-            "remaining_money": np.array([player_state.total_money], dtype=np.float32),
+            "remaining_special_cards": np.array([self.game_state.remaining_special_cards], dtype=np.float32),
+            "is_last_round": np.array([1 if self.game_state.remaining_special_cards == 1 else 0], dtype=np.float32),
+            "remaining_money": np.array([available_money], dtype=np.float32),
             "current_round_bid": np.array([auction.cur_bid], dtype=np.float32),
             "bids": np.array([auction.bids.get(i, 0) for i in range(self.num_players)], dtype=np.float32),
             "current_player_prestige": np.array(
@@ -346,11 +385,11 @@ class HighSocietyEnvSimple(AECEnv):
             ),
             "current_round_starter": np.array(
                 [1 if i == self.game_state.round_starter_idx else 0 for i in range(self.num_players)],
-                dtype=np.int32
+                dtype=np.float32
             ),
             "next_round_starter": np.array(
                 [1 if i == (self.game_state.round_starter_idx + 1) % self.num_players else 0 for i in range(self.num_players)],
-                dtype=np.int32
+                dtype=np.float32
             ),
         }
 

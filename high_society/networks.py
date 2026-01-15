@@ -1,10 +1,10 @@
 import torch.nn as nn
 
 def build_mlp(
-        input_size: int,
-        output_size: int,
-        n_layers: int,
-        size: int
+    input_size: int,
+    output_size: int,
+    n_layers: int,
+    size: int
 ) -> nn.Module:
     """Builds a feedforward neural network"""
     layers = []
@@ -14,6 +14,6 @@ def build_mlp(
         layers.append(nn.Tanh())
         in_size = size
     layers.append(nn.Linear(in_size, output_size))
-
+    layers.append(nn.Softplus())
     mlp = nn.Sequential(*layers)
     return mlp

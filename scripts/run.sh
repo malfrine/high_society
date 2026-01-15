@@ -1,0 +1,1 @@
+PYTHONPATH=. uv run python high_society/main.py
