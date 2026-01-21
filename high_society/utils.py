@@ -85,16 +85,26 @@ def collect_trajectories(
                 # Update last reward with final reward
                 episode_data[agent.player_id]["rewards"][-1] = env.rewards[agent_name]
 
+    # Determine winner (highest final reward among all players)
+    final_rewards = {name: env.rewards[name] for name in env.agents}
+    max_reward = max(final_rewards.values())
+
     # Convert lists to numpy arrays
     result: dict[int, dict[str, np.ndarray]] = {}
     for player_id, data in episode_data.items():
+        agent_name = f"player_{player_id}"
+        won = final_rewards[agent_name] == max_reward and max_reward > 0
+        # Propagate final reward to all steps (episode return)
+        n_steps = len(data["observations"])
+        episode_return = final_rewards[agent_name]
         result[player_id] = {
             "observations": np.array(data["observations"]),
             "actions": np.array(data["actions"]),
             "log_probs": np.array(data["log_probs"]),
-            "rewards": np.array(data["rewards"]),
+            "rewards": np.full(n_steps, episode_return, dtype=np.float32),
             "terminateds": np.array(data["terminateds"]),
             "truncateds": np.array(data["truncateds"]),
+            "won": won,
         }
 
     return result

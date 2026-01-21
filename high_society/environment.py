@@ -306,13 +306,22 @@ class SimpleHighSocietyEnv(AECEnv):
             if player_state.total_money == min_money:
                 eliminated_players.add(player_idx)
 
-        # Calculate rewards (prestige for non-eliminated, 0 for eliminated)
+        # Find winner: highest prestige among non-eliminated players
+        max_prestige = -1
+        winner_idx = None
+        for player_idx, player_state in self.game_state.player_states.items():
+            if player_idx not in eliminated_players:
+                if player_state.total_prestige > max_prestige:
+                    max_prestige = player_state.total_prestige
+                    winner_idx = player_idx
+
+        # Assign rewards: +1 for winner, -1 for losers
         for player_idx, player_state in self.game_state.player_states.items():
             agent = self.agents[player_idx]
-            if player_idx in eliminated_players:
-                self.rewards[agent] = 0
+            if player_idx == winner_idx:
+                self.rewards[agent] = 1.0
             else:
-                self.rewards[agent] = player_state.total_prestige
+                self.rewards[agent] = -1.0
 
             self.terminations[agent] = True
 

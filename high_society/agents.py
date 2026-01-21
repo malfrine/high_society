@@ -66,7 +66,8 @@ class VanillaPGAgent(Agent):
     def __init__(self, player_id: int, obs_space: spaces.Dict):
         self.player_id = player_id
         obs_dim = sum(space.shape[0] for space in obs_space.spaces.values())
-        self.raise_beta_params_net = build_mlp(obs_dim, 2, 2, 64)
+        self.obs_dim = obs_dim
+        self.raise_beta_params_net = build_mlp(obs_dim, 2, 10, 256)
         parameters = itertools.chain(self.raise_beta_params_net.parameters())
         self.optimizer = torch.optim.Adam(parameters, lr=1e-3)
 
@@ -86,7 +87,40 @@ class VanillaPGAgent(Agent):
         log_prob = beta_distn.log_prob(raise_intensity)
         return np.array([float(raise_intensity)]), log_prob.item()
 
+    def update(self, batch_traj_data: list[dict[str, np.ndarray]]):
+        """Update the agent's policy based on a batch of trajectory data.
+
+        Args:
+            batch_traj_data: List of trajectory dicts, each containing
+                'observations', 'actions', 'rewards' arrays from one game.
+        """
+        # Concatenate all trajectories from the batch 
+        observations = torch.from_numpy(
+            np.concatenate([traj["observations"] for traj in batch_traj_data], axis=0)
+        ).float()
+        actions = torch.from_numpy(
+            np.concatenate([traj["actions"] for traj in batch_traj_data], axis=0)
+        ).float()
+        rewards = torch.from_numpy(
+            np.concatenate([traj["rewards"] for traj in batch_traj_data], axis=0)
+        ).float()
+
+        # get the advantages
+        advantages = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
+
+        # get the log_probs
+        params = self.raise_beta_params_net(observations)
+        alpha, beta = params[:, 0], params[:, 1]
+        distns = torch.distributions.Beta(alpha, beta) # (n_samples, 1)
+        log_probs = distns.log_prob(actions.squeeze(-1))
+
+        self.optimizer.zero_grad()
+        loss = -(log_probs * advantages).mean()
+        loss.backward()
+        self.optimizer.step()
+
 
         
 
-    
+
+
