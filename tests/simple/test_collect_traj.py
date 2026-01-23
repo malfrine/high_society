@@ -1,10 +1,10 @@
-from high_society.environment import SimpleHighSocietyEnv
+from high_society.environments.simple import SimpleHighSocietyEnv
 from high_society.agents import VanillaPGAgent, RandomAgent
-from high_society.utils import collect_trajectories
+from high_society.main import collect_trajectories_simple
 
 
-def test_collect_trajectories_basic():
-    """Test that collect_trajectories returns correct structure and data types."""
+def test_collect_trajectories_simple_basic():
+    """Test that collect_trajectories_simple returns correct structure and data types."""
     env = SimpleHighSocietyEnv(num_players=3)
     env.reset(seed=42)
 
@@ -15,7 +15,7 @@ def test_collect_trajectories_basic():
         RandomAgent(player_id=2, obs_space=obs_space, pass_probability=0.5, seed=44),
     ]
 
-    result = collect_trajectories(env, agents, max_steps=10)
+    result = collect_trajectories_simple(env, agents, max_steps=10)
 
     # Should only collect data for VanillaPGAgent (player 0)
     assert 0 in result
@@ -41,7 +41,7 @@ def test_collect_trajectories_basic():
     assert data["truncateds"].shape[0] == T
 
 
-def test_collect_trajectories_truncation():
+def test_collect_trajectories_simple_truncation():
     """Test that truncation flag is set when max_steps is reached."""
     env = SimpleHighSocietyEnv(num_players=3)
     env.reset(seed=42)
@@ -54,14 +54,14 @@ def test_collect_trajectories_truncation():
     ]
 
     # Use very small max_steps to ensure truncation
-    result = collect_trajectories(env, agents, max_steps=5)
+    result = collect_trajectories_simple(env, agents, max_steps=5)
 
     data = result[0]
     # Last step should have truncated=True since we hit max_steps
     assert data["truncateds"][-1] == True
 
 
-def test_collect_trajectories_multiple_trainable_agents():
+def test_collect_trajectories_simple_multiple_trainable_agents():
     """Test collecting trajectories for multiple VanillaPGAgents."""
     env = SimpleHighSocietyEnv(num_players=3)
     env.reset(seed=42)
@@ -73,7 +73,7 @@ def test_collect_trajectories_multiple_trainable_agents():
         RandomAgent(player_id=2, obs_space=obs_space, pass_probability=0.5, seed=44),
     ]
 
-    result = collect_trajectories(env, agents, max_steps=10)
+    result = collect_trajectories_simple(env, agents, max_steps=10)
 
     # Should collect for both VanillaPGAgents
     assert 0 in result

@@ -1,7 +1,7 @@
 """Tests for complete High Society games"""
 import pytest
 import numpy as np
-from high_society.environment import SimpleHighSocietyEnv
+from high_society.environments.simple import SimpleHighSocietyEnv
 from high_society.agents import RandomAgent
 from high_society.utils import cat_dict_array
 
@@ -56,18 +56,20 @@ def test_random_game_completes():
     # Find minimum money (for elimination)
     min_money = min(player.total_money for player in player_states.values())
 
-    # Verify elimination rule is applied correctly
-    for i, agent_name in enumerate(env.agents):
-        player_state = player_states[i]
-        reward = rewards[agent_name]
+    # Verify rewards: +1 for winner, -1 for losers
+    winners = [name for name, r in rewards.items() if r == 1.0]
+    losers = [name for name, r in rewards.items() if r == -1.0]
 
-        if player_state.total_money == min_money:
-            # Eliminated player should have 0 reward
-            assert reward == 0, f"Player {i} eliminated but got reward {reward}"
-        else:
-            # Non-eliminated player reward should equal their prestige
-            assert reward == player_state.total_prestige, \
-                f"Player {i} reward {reward} != prestige {player_state.total_prestige}"
+    # Should have exactly one winner (or none if all eliminated)
+    all_eliminated = all(p.total_money == min_money for p in player_states.values())
+    if all_eliminated:
+        assert len(winners) == 0, "Should have no winner when all eliminated"
+    else:
+        assert len(winners) == 1, f"Should have exactly one winner, got {len(winners)}"
+        # Winner should not have minimum money
+        winner_idx = env.agents.index(winners[0])
+        assert player_states[winner_idx].total_money > min_money, \
+            "Winner should not have minimum money"
 
     # Verify at least one player has cards (someone bid on something)
     total_cards = sum(len(player.prestige_cards) for player in player_states.values())

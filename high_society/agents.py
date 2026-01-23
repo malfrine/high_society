@@ -4,7 +4,10 @@ import numpy as np
 import torch
 from gymnasium import spaces
 
-from high_society.networks import build_mlp
+from high_society.networks import build_mlp, build_discrete_mlp
+from high_society.utils import get_device
+
+device = get_device()
 
 
 class Agent:
@@ -12,6 +15,23 @@ class Agent:
     def get_action(self, observation: np.ndarray) -> tuple[np.ndarray, float]:
         """Get an action based on the current observation."""
         raise NotImplementedError
+
+
+class DiscreteAgent:
+    """Base class for agents with discrete action spaces."""
+
+    def get_action(self, observation: np.ndarray, action_mask: np.ndarray) -> tuple[int, float]:
+        """Get an action based on the current observation and valid action mask.
+
+        Args:
+            observation: Flattened observation array
+            action_mask: Boolean array where True = valid action
+
+        Returns:
+            Tuple of (action index, log_prob)
+        """
+        raise NotImplementedError
+
 
 class RandomAgent(Agent):
     """Agent that makes random decisions during auctions.
@@ -65,11 +85,13 @@ class VanillaPGAgent(Agent):
 
     def __init__(self, player_id: int, obs_space: spaces.Dict):
         self.player_id = player_id
+        self.device = device
         obs_dim = sum(space.shape[0] for space in obs_space.spaces.values())
         self.obs_dim = obs_dim
-        self.raise_beta_params_net = build_mlp(obs_dim, 2, 10, 256)
+        self.raise_beta_params_net = build_mlp(obs_dim, 2, 10, 256).to(self.device)
         parameters = itertools.chain(self.raise_beta_params_net.parameters())
         self.optimizer = torch.optim.Adam(parameters, lr=1e-3)
+
 
     @torch.no_grad
     def get_action(self, observation: np.ndarray) -> tuple[np.ndarray, float]:
@@ -78,7 +100,7 @@ class VanillaPGAgent(Agent):
         Returns:
             Tuple of (raise_intensity action, log_prob)
         """
-        obs = torch.from_numpy(observation)
+        obs = torch.from_numpy(observation).to(self.device)
         beta_params = self.raise_beta_params_net(obs)
         assert beta_params.shape == (2,), f"Expected (2,), got {beta_params.shape}"
         alpha, beta = beta_params[0], beta_params[1]
@@ -97,13 +119,13 @@ class VanillaPGAgent(Agent):
         # Concatenate all trajectories from the batch 
         observations = torch.from_numpy(
             np.concatenate([traj["observations"] for traj in batch_traj_data], axis=0)
-        ).float()
+        ).float().to(self.device)
         actions = torch.from_numpy(
             np.concatenate([traj["actions"] for traj in batch_traj_data], axis=0)
-        ).float()
+        ).float().to(self.device)
         rewards = torch.from_numpy(
             np.concatenate([traj["rewards"] for traj in batch_traj_data], axis=0)
-        ).float()
+        ).float().to(self.device)
 
         # get the advantages
         advantages = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
@@ -120,7 +142,40 @@ class VanillaPGAgent(Agent):
         self.optimizer.step()
 
 
-        
+class DiscreteRandomAgent(DiscreteAgent):
+    """Agent that makes random decisions from valid actions.
+
+    Uniformly samples from valid actions based on action mask.
+    """
+
+    def __init__(self, player_id: int, num_actions: int, seed: int | None = None):
+        """Initialize the discrete random agent.
+
+        Args:
+            player_id: The player index this agent controls
+            num_actions: Total number of possible actions
+            seed: Random seed for reproducibility
+        """
+        self.player_id = player_id
+        self.num_actions = num_actions
+        self.rng = np.random.RandomState(seed)
+
+    def get_action(self, observation: np.ndarray, action_mask: np.ndarray) -> tuple[int, float]:
+        """Select a random valid action.
+
+        Args:
+            observation: Flattened observation array (unused, for interface consistency)
+            action_mask: Boolean array where True = valid action
+
+        Returns:
+            Tuple of (action index, log_prob placeholder)
+        """
+        valid_actions = np.where(action_mask)[0]
+        action = self.rng.choice(valid_actions)
+        # Log prob for uniform distribution
+        log_prob = -np.log(len(valid_actions))
+        return int(action), log_prob
+
 
 
 

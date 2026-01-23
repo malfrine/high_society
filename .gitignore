@@ -36,3 +36,6 @@ data/
 *.json
 !experiments/configs/*.json
 !experiments/configs/*.yaml
+
+# Secrets
+.env

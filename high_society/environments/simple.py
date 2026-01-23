@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import Literal
 import random
 
+
 class PrestigeCard(BaseModel):
     type: Literal["value","special"]
     value: int | None = None
@@ -17,7 +18,7 @@ class PrestigeCard(BaseModel):
             return 2
         else:
             return 1
-    
+
 class MoneyCard(BaseModel):
     value: float
 
@@ -29,7 +30,7 @@ class AuctionRound(BaseModel):
     players_to_bid: set[int]
     card: PrestigeCard
     value_to_agent: dict[int, float]
-    
+
 class PlayerState(BaseModel):
     player_idx: int
     player_name: str
@@ -37,14 +38,14 @@ class PlayerState(BaseModel):
     prestige_cards: list[PrestigeCard]
     total_prestige: float = 0
     total_money: float = 0
-    
+
 class GameState(BaseModel):
     round_starter_idx: int = 0
     remaining_special_cards: int = 4
     player_states: dict[int, PlayerState]
     remaining_prestige_cards: list[PrestigeCard]
     cur_round: AuctionRound | None = None
-        
+
 
 def get_total_prestige(cards: list[PrestigeCard]) -> float:
     total_value = sum(card.value for card in cards if card.type == "value")
@@ -86,7 +87,7 @@ class SimpleHighSocietyEnv(AECEnv):
         self.action_spaces = {
             agent: spaces.Box(0, 1, shape=(1,), dtype=np.float32) for agent in self.agents
         }
-        
+
         self.reset()
 
     def obs_dim(self, agent: str) -> int:
@@ -94,7 +95,7 @@ class SimpleHighSocietyEnv(AECEnv):
 
     def action_dim(self, agent: str) -> int:
         return self.action_space(agent).shape[0]
-        
+
     def observation_space(self, agent):
         return self.observation_spaces[agent]
 
@@ -164,13 +165,13 @@ class SimpleHighSocietyEnv(AECEnv):
         self._select_first_valid_agent(self.game_state.round_starter_idx)
 
         return self.observe(self.agent_selection), self.infos[self.agent_selection]
-        
+
     def render(self):
         raise NotImplementedError()
 
     def close(self):
         pass
-    
+
     def start_game(self, players: list[str]) -> GameState:
 
         prestige_cards = [
@@ -197,7 +198,7 @@ class SimpleHighSocietyEnv(AECEnv):
             player_states=player_states,
             remaining_prestige_cards=prestige_cards,
         )
-        
+
     def start_auction_round(self, game_state: GameState) -> AuctionRound:
         drawn_card = game_state.remaining_prestige_cards.pop()
 

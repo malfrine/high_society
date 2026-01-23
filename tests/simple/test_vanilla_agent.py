@@ -1,4 +1,4 @@
-from high_society.environment import SimpleHighSocietyEnv
+from high_society.environments.simple import SimpleHighSocietyEnv
 from high_society.agents import VanillaPGAgent, RandomAgent
 from high_society.utils import cat_dict_array
 

@@ -12,6 +12,7 @@ dependencies = [
     "pytest>=8.0.0",
     "pettingzoo>=1.25.0",
     "pydantic>=2.12.5",
+    "runpod>=1.8.1",
 ]
 
 [build-system]
