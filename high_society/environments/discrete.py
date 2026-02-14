@@ -72,6 +72,7 @@ NUM_MONEY_CARDS = len(MONEY_CARD_VALUES)
 # Action indices: 0 = PASS, 1-10 = add money card of that value
 ACTION_PASS = 0
 
+MAX_NUM_PLAYERS = 5 
 
 class DiscreteHighSocietyEnv(AECEnv):
     """High Society environment with discrete action space.
@@ -108,9 +109,9 @@ class DiscreteHighSocietyEnv(AECEnv):
                 "remaining_money": spaces.Box(low=0, high=55, shape=(1,), dtype=np.float32),
                 "current_high_bid": spaces.Box(low=0, high=55, shape=(1,), dtype=np.float32),
                 "my_current_bid": spaces.Box(low=0, high=55, shape=(1,), dtype=np.float32),
-                "bids": spaces.Box(low=0, high=55, shape=(num_players,), dtype=np.float32),
-                "current_player_prestige": spaces.Box(low=0, high=100, shape=(num_players,), dtype=np.float32),
-                "potential_player_prestige": spaces.Box(low=0, high=100, shape=(num_players,), dtype=np.float32),
+                "bids": spaces.Box(low=0, high=55, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
+                "current_player_prestige": spaces.Box(low=0, high=100, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
+                "potential_player_prestige": spaces.Box(low=0, high=100, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
                 # Which money cards the player still has (1 = has, 0 = spent in previous auctions)
                 "available_money_cards": spaces.Box(low=0, high=1, shape=(NUM_MONEY_CARDS,), dtype=np.float32),
                 # Which cards are committed in current bid
@@ -401,6 +402,17 @@ class DiscreteHighSocietyEnv(AECEnv):
         for cv in auction.cards_in_bid.get(agent_idx, set()):
             in_bid[cv - 1] = 1.0
 
+        # Pad arrays to MAX_NUM_PLAYERS so observation shape is consistent
+        # regardless of actual number of players in the game
+        bids = np.zeros(MAX_NUM_PLAYERS, dtype=np.float32)
+        current_player_prestige = np.zeros(MAX_NUM_PLAYERS, dtype=np.float32)
+        potential_player_prestige = np.zeros(MAX_NUM_PLAYERS, dtype=np.float32)
+
+        for i in range(self.num_players):
+            bids[i] = auction.bids.get(i, 0)
+            current_player_prestige[i] = self.game_state.player_states[i].total_prestige
+            potential_player_prestige[i] = auction.value_to_agent[i]
+
         return {
             "total_prestige": np.array([player_state.total_prestige], dtype=np.float32),
             "remaining_special_cards": np.array([self.game_state.remaining_special_cards], dtype=np.float32),
@@ -408,15 +420,9 @@ class DiscreteHighSocietyEnv(AECEnv):
             "remaining_money": np.array([player_state.total_money], dtype=np.float32),
             "current_high_bid": np.array([auction.cur_bid], dtype=np.float32),
             "my_current_bid": np.array([auction.bids.get(agent_idx, 0)], dtype=np.float32),
-            "bids": np.array([auction.bids.get(i, 0) for i in range(self.num_players)], dtype=np.float32),
-            "current_player_prestige": np.array(
-                [self.game_state.player_states[i].total_prestige for i in range(self.num_players)],
-                dtype=np.float32
-            ),
-            "potential_player_prestige": np.array(
-                [auction.value_to_agent[i] for i in range(self.num_players)],
-                dtype=np.float32
-            ),
+            "bids": bids,
+            "current_player_prestige": current_player_prestige,
+            "potential_player_prestige": potential_player_prestige,
             "available_money_cards": available,
             "cards_in_bid": in_bid,
         }

@@ -1,8 +1,10 @@
+from collections import defaultdict
+import os
 import numpy as np
-
+import torch
 from high_society.environments.simple import SimpleHighSocietyEnv
 from high_society.environments.discrete import DiscreteHighSocietyEnv
-from high_society.agents import VanillaPGAgent, RandomAgent, Agent, DiscreteAgent, DiscreteRandomAgent
+from high_society.agents import VanillaPGAgent, RandomAgent, Agent, DiscreteAgent, DiscreteRandomPassAgent, DQNAgent
 from high_society.utils import cat_dict_array
 
 
@@ -105,14 +107,9 @@ def collect_trajectories_simple(
     return result
 
 
-# For backwards compatibility
-collect_trajectories = collect_trajectories_simple
-
-
 def collect_trajectories_discrete(
     env: DiscreteHighSocietyEnv,
     agents: list[DiscreteAgent],
-    trainable_ids: set[int],
     max_steps: int = 1000
 ) -> dict[int, dict[str, np.ndarray]]:
     """Run a game episode and collect trajectory data for discrete action space.
@@ -120,7 +117,6 @@ def collect_trajectories_discrete(
     Args:
         env: The DiscreteHighSocietyEnv environment
         agents: List of DiscreteAgent instances
-        trainable_ids: Set of player_ids to collect data for
         max_steps: Maximum steps before truncating
 
     Returns:
@@ -140,8 +136,8 @@ def collect_trajectories_discrete(
 
     # Initialize data collection for trainable agents
     episode_data: dict[int, dict[str, list]] = {}
-    for player_id in trainable_ids:
-        episode_data[player_id] = {
+    for agent in agents:
+        episode_data[agent.player_id] = {
             "observations": [],
             "actions": [],
             "action_masks": [],
@@ -170,25 +166,22 @@ def collect_trajectories_discrete(
             episode_data[agent.player_id]["rewards"].append(env.rewards[agent_name])
             episode_data[agent.player_id]["terminateds"].append(env.terminations[agent_name])
             episode_data[agent.player_id]["truncateds"].append(env.truncations[agent_name])
-
         env.step(action)
         step_count += 1
 
     truncated = step_count >= max_steps
 
     # Update final step data
-    for player_id in trainable_ids:
-        if episode_data[player_id]["terminateds"]:
-            agent_name = f"player_{player_id}"
-            episode_data[player_id]["terminateds"][-1] = env.terminations[agent_name]
-            episode_data[player_id]["truncateds"][-1] = truncated
-            episode_data[player_id]["rewards"][-1] = env.rewards[agent_name]
+    for agent in agents:
+        if agent.player_id in episode_data:
+            agent_name = f"player_{agent.player_id}"
+            episode_data[agent.player_id]["terminateds"][-1] = env.terminations[agent_name]
+            episode_data[agent.player_id]["truncateds"][-1] = truncated
+            episode_data[agent.player_id]["rewards"][-1] = env.rewards[agent_name]
 
-    # Determine winner
     final_rewards = {name: env.rewards[name] for name in env.agents}
     max_reward = max(final_rewards.values())
 
-    # Convert to numpy arrays
     result: dict[int, dict[str, np.ndarray]] = {}
     for player_id, data in episode_data.items():
         agent_name = f"player_{player_id}"
@@ -208,31 +201,69 @@ def collect_trajectories_discrete(
 
     return result
 
+def run_sessions(num_sessions: int, batch_size: int, training_steps: int, max_steps: int) -> DQNAgent:
+
+    dqn_agent = None
+    wins_by_pass_prob: dict[float, int] = defaultdict(int)
+    games_by_pass_prob: dict[float, int] = defaultdict(int)
+
+    v0_agent = None
+    if os.path.exists("./experiments/results/v0_agent.pth"):
+        v0_agent = DQNAgent(player_id=0, num_actions=env.num_actions, obs_space=env.observation_space("player_0"), epsilon=0.1)
+        v0_agent.q_net.load_state_dict(torch.load("./experiments/results/v0_agent.pth"))
+
+    for session in range(num_sessions):
+        num_random_agents = np.random.randint(2, 4)
+        env = DiscreteHighSocietyEnv(num_players=num_random_agents + 1)
+        if dqn_agent is None:
+            dqn_agent = DQNAgent(player_id=0, num_actions=env.num_actions, obs_space=env.observation_space("player_0"), epsilon=0.1)
+            if os.path.exists("./experiments/results/dqn_agent.pth"):
+                dqn_agent.q_net.load_state_dict(torch.load("./experiments/results/dqn_agent.pth"))
+        random_agents: list[DiscreteAgent] = [
+            DiscreteRandomPassAgent(player_id=i, pass_probability=np.random.uniform(0.0, 1.0), seed=43 + i)
+            for i in range(1, num_random_agents + 1)
+        ]
+        agents: list[DiscreteAgent] = [dqn_agent] + random_agents
+
+        for step in range(training_steps):
+            batch_traj_data: list[dict[str, np.ndarray]] = []
+            wins = 0
+            for _ in range(batch_size):
+                env.reset()
+                traj_data = collect_trajectories_discrete(env, agents, max_steps=max_steps)
+                traj = traj_data[0]  # Get DQN agent's trajectory (player 0)
+                batch_traj_data.append(traj)
+                if traj["won"]:
+                    wins += 1
+
+                for agent in random_agents:
+                    pass_prob_bucket = round(agent.pass_probability * 10) / 10.0
+                    if traj["won"]:
+                        wins_by_pass_prob[pass_prob_bucket] += 1
+                    games_by_pass_prob[pass_prob_bucket] += 1
+
+            dqn_agent.update(batch_traj_data)
+
+            print(f"Session {session + 1}/{num_sessions}: Step {step + 1}/{training_steps}: DQN agent won {wins}/{batch_size} games ({100 * wins / batch_size:.1f}%)")
+
+            print("\n=== Win Rate Metrics ===\n")
+            for bucket in sorted(wins_by_pass_prob.keys()):
+                total_games = games_by_pass_prob[bucket]
+                total_wins = wins_by_pass_prob[bucket]
+                win_rate = 100 * total_wins / total_games if total_games > 0 else 0
+                print(f"Pass prob {bucket:.1f}: {total_wins}/{total_games} wins ({win_rate:.1f}%)")
+            cumulative_win_rate = 100 * sum(wins_by_pass_prob.values()) / sum(games_by_pass_prob.values())
+            print(f"Cumulative win rate: {cumulative_win_rate:.1f}%")
+
+    return dqn_agent
 
 def main():
-    # run 1000 games with random agents
-    env = SimpleHighSocietyEnv(3)
-    max_steps = 1000
-    batch_size = 10_000
-    training_steps = 1000
-    agents: list[Agent] = [
-        RandomAgent(player_id=0, obs_space=env.observation_space("player_0"), pass_probability=0.3),
-        RandomAgent(player_id=1, obs_space=env.observation_space("player_1"), pass_probability=0.5),
-        VanillaPGAgent(player_id=2, obs_space=env.observation_space("player_2"))
-    ]
-    for step in range(training_steps):
-        batch_traj_data: list[dict[str, np.ndarray]] = []
-        wins = 0
-        for _ in range(batch_size):
-            env.reset()
-            traj_data = collect_trajectories(env, agents, max_steps=max_steps)
-            traj = traj_data[2]  # Get player 2's trajectory
-            batch_traj_data.append(traj)
-            if traj["won"]:
-                wins += 1
-        pg_agent: VanillaPGAgent = agents[2]
-        pg_agent.update(batch_traj_data)
-        print(f"Step {step + 1}/{training_steps}: PG agent won {wins}/{batch_size} games ({100 * wins / batch_size:.1f}%)")
-
+    max_steps = 500
+    batch_size = 100
+    training_steps = 10
+    num_sessions = 4000
+    dqn_agent = run_sessions(num_sessions, batch_size, training_steps, max_steps)
+    torch.save(dqn_agent.q_net.state_dict(), "./experiments/results/dqn_agent.pth")
+    
 if __name__ == "__main__":
     main()
