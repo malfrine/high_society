@@ -92,40 +92,8 @@ class DiscreteHighSocietyEnv(AECEnv):
 
     def __init__(self, num_players: int):
         super().__init__()
-        if not (3 <= num_players <= 5):
-            raise ValueError("Must have between 3 - 5 players")
         self.name = "discrete_high_society"
-        self.num_players = num_players
-        self.agents = [f"player_{i}" for i in range(num_players)]
-        self.possible_agents = self.agents[:]
-
-        self.num_actions = 1 + NUM_MONEY_CARDS  # PASS + 10 money cards
-
-        self.observation_spaces = {
-            agent: spaces.Dict({
-                "total_prestige": spaces.Box(low=0, high=100, shape=(1,), dtype=np.float32),
-                "remaining_special_cards": spaces.Box(low=0, high=4, shape=(1,), dtype=np.float32),
-                "is_last_round": spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
-                "remaining_money": spaces.Box(low=0, high=55, shape=(1,), dtype=np.float32),
-                "current_high_bid": spaces.Box(low=0, high=55, shape=(1,), dtype=np.float32),
-                "my_current_bid": spaces.Box(low=0, high=55, shape=(1,), dtype=np.float32),
-                "bids": spaces.Box(low=0, high=55, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
-                "current_player_prestige": spaces.Box(low=0, high=100, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
-                "potential_player_prestige": spaces.Box(low=0, high=100, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
-                # Which money cards the player still has (1 = has, 0 = spent in previous auctions)
-                "available_money_cards": spaces.Box(low=0, high=1, shape=(NUM_MONEY_CARDS,), dtype=np.float32),
-                # Which cards are committed in current bid
-                "cards_in_bid": spaces.Box(low=0, high=1, shape=(NUM_MONEY_CARDS,), dtype=np.float32),
-            })
-            for agent in self.agents
-        }
-
-        # Discrete action space: 0 = pass, 1-10 = add that money card
-        self.action_spaces = {
-            agent: spaces.Discrete(self.num_actions) for agent in self.agents
-        }
-
-        self.reset()
+        self.reset(num_players)
 
     def obs_dim(self, agent: str) -> int:
         return sum(space.shape[0] for space in self.observation_space(agent).values())
@@ -200,10 +168,41 @@ class DiscreteHighSocietyEnv(AECEnv):
         self._select_next_agent()
         self._clear_rewards()
 
-    def reset(self, seed=None, options=None):
+    def reset(self, num_players = None, seed=None, options=None):
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
+        if num_players is not None:
+            self.num_players = num_players
+        
+        assert self.num_players is not None
+        assert 3 <= self.num_players <= 5
+        self.agents = [f"player_{i}" for i in range(self.num_players)]
+        self.possible_agents = self.agents[:]
+        self.num_actions = 1 + NUM_MONEY_CARDS  # PASS + 10 money cards
+
+        self.observation_spaces = {
+            agent: spaces.Dict({
+                "total_prestige": spaces.Box(low=0, high=100, shape=(1,), dtype=np.float32),
+                "remaining_special_cards": spaces.Box(low=0, high=4, shape=(1,), dtype=np.float32),
+                "is_last_round": spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
+                "remaining_money": spaces.Box(low=0, high=55, shape=(1,), dtype=np.float32),
+                "current_high_bid": spaces.Box(low=0, high=55, shape=(1,), dtype=np.float32),
+                "my_current_bid": spaces.Box(low=0, high=55, shape=(1,), dtype=np.float32),
+                "bids": spaces.Box(low=0, high=55, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
+                "current_player_prestige": spaces.Box(low=0, high=100, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
+                "potential_player_prestige": spaces.Box(low=0, high=100, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
+                # Which money cards the player still has (1 = has, 0 = spent in previous auctions)
+                "available_money_cards": spaces.Box(low=0, high=1, shape=(NUM_MONEY_CARDS,), dtype=np.float32),
+                # Which cards are committed in current bid
+                "cards_in_bid": spaces.Box(low=0, high=1, shape=(NUM_MONEY_CARDS,), dtype=np.float32),
+            })
+            for agent in self.agents
+        }
+
+        self.action_spaces = {
+            agent: spaces.Discrete(self.num_actions) for agent in self.agents
+        }
 
         self.game_state = self._start_game()
         self.game_state.cur_round = self._start_auction_round()

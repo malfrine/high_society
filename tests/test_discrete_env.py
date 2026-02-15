@@ -217,9 +217,9 @@ def test_observation_shape():
     assert obs["remaining_money"].shape == (1,)
     assert obs["current_high_bid"].shape == (1,)
     assert obs["my_current_bid"].shape == (1,)
-    assert obs["bids"].shape == (3,)
-    assert obs["current_player_prestige"].shape == (3,)
-    assert obs["potential_player_prestige"].shape == (3,)
+    assert obs["bids"].shape == (5,)
+    assert obs["current_player_prestige"].shape == (5,)
+    assert obs["potential_player_prestige"].shape == (5,)
     assert obs["available_money_cards"].shape == (10,)
     assert obs["cards_in_bid"].shape == (10,)
 

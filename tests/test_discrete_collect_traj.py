@@ -16,11 +16,9 @@ def test_collect_trajectories_discrete_basic():
     ]
 
     # Only collect for player 0
-    result = collect_trajectories_discrete(env, agents, trainable_ids={0}, max_steps=100)
+    result = collect_trajectories_discrete(env, agents, max_steps=100)
 
     assert 0 in result
-    assert 1 not in result
-    assert 2 not in result
 
     data = result[0]
     assert "observations" in data
@@ -53,7 +51,7 @@ def test_collect_trajectories_discrete_action_masks():
         DiscreteRandomAgent(player_id=2, num_actions=env.num_actions, seed=44),
     ]
 
-    result = collect_trajectories_discrete(env, agents, trainable_ids={0}, max_steps=100)
+    result = collect_trajectories_discrete(env, agents, max_steps=100)
     data = result[0]
 
     # Action masks should be boolean arrays
@@ -80,7 +78,7 @@ def test_collect_trajectories_discrete_truncation():
     ]
 
     # Use very small max_steps to ensure truncation
-    result = collect_trajectories_discrete(env, agents, trainable_ids={0}, max_steps=5)
+    result = collect_trajectories_discrete(env, agents, max_steps=5)
 
     data = result[0]
     assert data["truncateds"][-1] == True
@@ -96,11 +94,10 @@ def test_collect_trajectories_discrete_multiple_trainable():
         DiscreteRandomAgent(player_id=2, num_actions=env.num_actions, seed=44),
     ]
 
-    result = collect_trajectories_discrete(env, agents, trainable_ids={0, 1}, max_steps=100)
+    result = collect_trajectories_discrete(env, agents, max_steps=100)
 
     assert 0 in result
     assert 1 in result
-    assert 2 not in result
 
     assert len(result[0]["log_probs"]) > 0
     assert len(result[1]["log_probs"]) > 0
@@ -116,7 +113,7 @@ def test_collect_trajectories_discrete_rewards():
         DiscreteRandomAgent(player_id=2, num_actions=env.num_actions, seed=44),
     ]
 
-    result = collect_trajectories_discrete(env, agents, trainable_ids={0, 1, 2}, max_steps=1000)
+    result = collect_trajectories_discrete(env, agents, max_steps=1000)
 
     # Count winners
     winners = [pid for pid, data in result.items() if data["won"]]
@@ -142,7 +139,7 @@ def test_collect_trajectories_discrete_complete_game():
         DiscreteRandomAgent(player_id=2, num_actions=env.num_actions, seed=44),
     ]
 
-    result = collect_trajectories_discrete(env, agents, trainable_ids={0}, max_steps=1000)
+    result = collect_trajectories_discrete(env, agents, max_steps=1000)
 
     data = result[0]
 

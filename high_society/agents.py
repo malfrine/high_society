@@ -259,8 +259,12 @@ class DQNAgent(DiscreteAgent):
         action = q_vals.argmax(dim=-1)
         return int(action.item()), 0.0
 
-    def update(self, batch_traj_data: list[dict[str, np.ndarray]]):
-        """Update Q-network using batch of trajectory data."""
+    def update(self, batch_traj_data: list[dict[str, np.ndarray]]) -> dict[str, float]:
+        """Update Q-network using batch of trajectory data.
+
+        Returns:
+            Dict with metrics: loss, mean_q, mean_target, q_error
+        """
         observations = np.concatenate([traj["observations"] for traj in batch_traj_data], axis=0)
         actions = np.concatenate([traj["actions"] for traj in batch_traj_data], axis=0)
         action_masks = np.concatenate([traj["action_masks"] for traj in batch_traj_data], axis=0)
@@ -302,3 +306,10 @@ class DQNAgent(DiscreteAgent):
         self.current_step += 1
         if self.current_step % self.target_update_freq == 0:
             self.target_q_net.load_state_dict(self.q_net.state_dict())
+
+        return {
+            "loss": loss.item(),
+            "mean_q": cur_q_values.mean().item(),
+            "mean_target": target_values.mean().item(),
+            "q_error": (cur_q_values - target_values).abs().mean().item(),
+        }

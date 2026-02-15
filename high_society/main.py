@@ -2,6 +2,7 @@ from collections import defaultdict
 import os
 import numpy as np
 import torch
+from torch.utils.tensorboard import SummaryWriter
 from high_society.environments.simple import SimpleHighSocietyEnv
 from high_society.environments.discrete import DiscreteHighSocietyEnv
 from high_society.agents import VanillaPGAgent, RandomAgent, Agent, DiscreteAgent, DiscreteRandomPassAgent, DQNAgent
@@ -207,10 +208,7 @@ def run_sessions(num_sessions: int, batch_size: int, training_steps: int, max_st
     wins_by_pass_prob: dict[float, int] = defaultdict(int)
     games_by_pass_prob: dict[float, int] = defaultdict(int)
 
-    v0_agent = None
-    if os.path.exists("./experiments/results/v0_agent.pth"):
-        v0_agent = DQNAgent(player_id=0, num_actions=env.num_actions, obs_space=env.observation_space("player_0"), epsilon=0.1)
-        v0_agent.q_net.load_state_dict(torch.load("./experiments/results/v0_agent.pth"))
+    writer = SummaryWriter("runs/dqn_high_society")
 
     for session in range(num_sessions):
         num_random_agents = np.random.randint(2, 4)
@@ -242,20 +240,69 @@ def run_sessions(num_sessions: int, batch_size: int, training_steps: int, max_st
                         wins_by_pass_prob[pass_prob_bucket] += 1
                     games_by_pass_prob[pass_prob_bucket] += 1
 
-            dqn_agent.update(batch_traj_data)
+            metrics = dqn_agent.update(batch_traj_data)
 
-            print(f"Session {session + 1}/{num_sessions}: Step {step + 1}/{training_steps}: DQN agent won {wins}/{batch_size} games ({100 * wins / batch_size:.1f}%)")
+            global_step = session * training_steps + step
+            win_rate = wins / batch_size
+            cumulative_win_rate = sum(wins_by_pass_prob.values()) / sum(games_by_pass_prob.values())
 
+            writer.add_scalar("train/win_rate", win_rate, global_step)
+            writer.add_scalar("train/cumulative_win_rate", cumulative_win_rate, global_step)
+            writer.add_scalar("train/loss", metrics["loss"], global_step)
+            writer.add_scalar("q_values/mean_predicted", metrics["mean_q"], global_step)
+            writer.add_scalar("q_values/mean_target", metrics["mean_target"], global_step)
+            writer.add_scalar("q_values/error", metrics["q_error"], global_step)
+            for bucket in sorted(wins_by_pass_prob.keys()):
+                total_games = games_by_pass_prob[bucket]
+                total_wins = wins_by_pass_prob[bucket]
+                bucket_win_rate = total_wins / total_games if total_games > 0 else 0
+                writer.add_scalar(f"win_rate_by_pass_prob/{bucket:.1f}", bucket_win_rate, global_step)
+            writer.flush()
+
+            print(f"Session {session + 1}/{num_sessions}: Step {step + 1}/{training_steps}: DQN agent won {wins}/{batch_size} games ({100 * win_rate:.1f}%)")
             print("\n=== Win Rate Metrics ===\n")
             for bucket in sorted(wins_by_pass_prob.keys()):
                 total_games = games_by_pass_prob[bucket]
                 total_wins = wins_by_pass_prob[bucket]
-                win_rate = 100 * total_wins / total_games if total_games > 0 else 0
-                print(f"Pass prob {bucket:.1f}: {total_wins}/{total_games} wins ({win_rate:.1f}%)")
-            cumulative_win_rate = 100 * sum(wins_by_pass_prob.values()) / sum(games_by_pass_prob.values())
-            print(f"Cumulative win rate: {cumulative_win_rate:.1f}%")
+                bucket_win_rate = 100 * total_wins / total_games if total_games > 0 else 0
+                print(f"Pass prob {bucket:.1f}: {total_wins}/{total_games} wins ({bucket_win_rate:.1f}%)")
+            print(f"Cumulative win rate: {100 * cumulative_win_rate:.1f}%")
 
+    writer.close()
     return dqn_agent
+
+
+# def run_self_play(env: DiscreteHighSocietyEnv, learning_agent: DQNAgent, num_dqn_agents: int, num_random_agents: int, max_steps: int, training_steps: int, batch_size: int) -> None:
+#     assert num_dqn_agents + num_random_agents + 1 <= 5
+
+#     dqn_agents: list[DQNAgent] = [
+#         DQNAgent(player_id=i, num_actions=env.num_actions, obs_space=env.observation_space(f"player_{i+1}"), epsilon=0.1)
+#         for i in range(num_dqn_agents)
+#     ]
+#     random_agents: list[DiscreteAgent] = [
+#         DiscreteRandomPassAgent(player_id=i, pass_probability=np.random.uniform(0.0, 1.0), seed=43 + i)
+#         for i in range(num_dqn_agents, num_dqn_agents + num_random_agents)
+#     ]
+    
+    
+#     for i in range(num_sessions):
+#         batch_traj_data: list[dict[str, np.ndarray]] = []
+#         wins = 0
+#         for _ in range(batch_size):
+#             env.reset()
+#             traj_data = collect_trajectories_discrete(env, agents, max_steps=max_steps)
+#             traj = traj_data[0]  # Get DQN agent's trajectory (player 0)
+#             batch_traj_data.append(traj)
+#             if traj["won"]:
+#                 wins += 1
+
+#             for agent in random_agents:
+#                 pass_prob_bucket = round(agent.pass_probability * 10) / 10.0
+#                 if traj["won"]:
+
+#             metrics = dqn_agent.update(batch_traj_data)
+
+#     writer.close()
 
 def main():
     max_steps = 500
