@@ -1,5 +1,8 @@
 from collections import defaultdict
 import os
+from datetime import datetime
+import random
+
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -151,6 +154,7 @@ def collect_trajectories_discrete(
     step_count = 0
     while not all(env.terminations.values()) and step_count < max_steps:
         agent_name = env.agent_selection
+        assert agent_name in agent_lookup, f"{agent_lookup.keys()}, {agent_name}"
         agent = agent_lookup[agent_name]
 
         obs_dict = env.observe(agent_name)
@@ -208,7 +212,8 @@ def run_sessions(num_sessions: int, batch_size: int, training_steps: int, max_st
     wins_by_pass_prob: dict[float, int] = defaultdict(int)
     games_by_pass_prob: dict[float, int] = defaultdict(int)
 
-    writer = SummaryWriter("runs/dqn_high_society")
+    now = datetime.now()
+    writer = SummaryWriter(f"runs/random_sessiosn_{now}")
 
     for session in range(num_sessions):
         num_random_agents = np.random.randint(2, 4)
@@ -271,46 +276,126 @@ def run_sessions(num_sessions: int, batch_size: int, training_steps: int, max_st
     writer.close()
     return dqn_agent
 
+def run_self_play(env: DiscreteHighSocietyEnv, learning_agent: DQNAgent, dqn_pool: list[str], max_steps: int, training_steps: int, batch_size: int) -> None:
 
-# def run_self_play(env: DiscreteHighSocietyEnv, learning_agent: DQNAgent, num_dqn_agents: int, num_random_agents: int, max_steps: int, training_steps: int, batch_size: int) -> None:
-#     assert num_dqn_agents + num_random_agents + 1 <= 5
+    now = datetime.now()
+    writer = SummaryWriter(f"runs/self_play{now}")
 
-#     dqn_agents: list[DQNAgent] = [
-#         DQNAgent(player_id=i, num_actions=env.num_actions, obs_space=env.observation_space(f"player_{i+1}"), epsilon=0.1)
-#         for i in range(num_dqn_agents)
-#     ]
-#     random_agents: list[DiscreteAgent] = [
-#         DiscreteRandomPassAgent(player_id=i, pass_probability=np.random.uniform(0.0, 1.0), seed=43 + i)
-#         for i in range(num_dqn_agents, num_dqn_agents + num_random_agents)
-#     ]
+    wins_by_agent_class: dict[str, int] = defaultdict(int)
+    games_by_agent_class: dict[str, int] = defaultdict(int)
+    total_games = 0
+    total_wins = 0
     
-    
-#     for i in range(num_sessions):
-#         batch_traj_data: list[dict[str, np.ndarray]] = []
-#         wins = 0
-#         for _ in range(batch_size):
-#             env.reset()
-#             traj_data = collect_trajectories_discrete(env, agents, max_steps=max_steps)
-#             traj = traj_data[0]  # Get DQN agent's trajectory (player 0)
-#             batch_traj_data.append(traj)
-#             if traj["won"]:
-#                 wins += 1
+    for step in range(training_steps):
 
-#             for agent in random_agents:
-#                 pass_prob_bucket = round(agent.pass_probability * 10) / 10.0
-#                 if traj["won"]:
+        num_opponents = random.randint(2, 4)
 
-#             metrics = dqn_agent.update(batch_traj_data)
+        env.reset(num_players=num_opponents + 1)
+        # pick dqn agents with 75% probability
+        num_dqn_agents = np.random.binomial(num_opponents, 0.9)
+        num_random_agents = num_opponents - num_dqn_agents
 
-#     writer.close()
+        batch_traj_data: list[dict[str, np.ndarray]] = []
+        wins_in_batch = 0
+
+        dqn_agents: list[DQNAgent] = [
+            DQNAgent(player_id=i + 1, num_actions=env.num_actions, obs_space=env.observation_space(f"player_{i+1}"), epsilon=0.1)
+            for i in range(num_dqn_agents)
+        ]
+        dqn_agent_paths = []
+        for a in dqn_agents:
+            selected_dqn = dqn_pool[random.randint(0, len(dqn_pool) - 1)]
+            dqn_agent_paths.append(selected_dqn)
+            a.q_net.load_state_dict(torch.load(f"./experiments/results/pool/{selected_dqn}"))
+
+        random_agents: list[DiscreteAgent] = [
+            DiscreteRandomPassAgent(player_id=i + num_dqn_agents + 1, pass_probability=np.random.uniform(0.0, 1.0), seed=43 + i)
+            for i in range(num_random_agents)
+        ]
+
+        agents = [learning_agent]
+        agents.extend(dqn_agents)
+        agents.extend(random_agents)
+
+        for _ in range(batch_size):
+            traj_data = collect_trajectories_discrete(env, agents, max_steps=max_steps)
+            learning_agent_traj = traj_data[0]  # Get learning agent's trajectory (player 0)
+            batch_traj_data.extend(traj_data.values())
+            won = learning_agent_traj["won"]
+            if won:
+                wins_in_batch += 1
+
+            games_by_agent_class["learning_agent"] += 1
+            if won:
+                wins_by_agent_class["learning_agent"] += 1
+            for i, agent in enumerate(dqn_agents):
+                agent_class = dqn_agent_paths[i]
+                games_by_agent_class[agent_class] += 1
+                if won:
+                    wins_by_agent_class[agent_class] += 1
+            for agent in random_agents:
+                agent_class = f"random_{round(agent.pass_probability * 10) / 10.0:.1f}"
+                games_by_agent_class[agent_class] += 1
+                if won:
+                    wins_by_agent_class[agent_class] += 1
+        metrics = learning_agent.update(batch_traj_data)
+        total_games += batch_size
+        total_wins += wins_in_batch
+
+        batch_win_rate = wins_in_batch / batch_size
+        cumulative_win_rate = total_wins / total_games
+
+
+        writer.add_scalar("train/win_rate", batch_win_rate, step)
+        writer.add_scalar("train/cumulative_win_rate", cumulative_win_rate, step)
+        writer.add_scalar("train/loss", metrics["loss"], step)
+        writer.add_scalar("q_values/mean_predicted", metrics["mean_q"], step)
+        writer.add_scalar("q_values/mean_target", metrics["mean_target"], step)
+        writer.add_scalar("q_values/error", metrics["q_error"], step)
+
+        print(f"Step {step + 1}/{training_steps}: Win rate: {100 * batch_win_rate:.1f}%")
+        print(f"Cumulative win rate: {100 * cumulative_win_rate:.1f}%")
+        for agent_class in wins_by_agent_class.keys():
+            class_games = games_by_agent_class[agent_class]
+            class_wins = wins_by_agent_class[agent_class]
+            bucket_win_rate = 100 * class_wins / class_games if class_games > 0 else 0
+            writer.add_scalar(f"win_rate_by_opponent/{agent_class}", bucket_win_rate / 100, step)
+            print(f"\t{agent_class}: {class_wins}/{class_games} wins ({bucket_win_rate:.1f}%)")
+
+        writer.flush()
+
+    writer.close()
+
+    return learning_agent
+
+def run_tournament(max_steps: int, training_steps: int, batch_size: int, sessions: int) -> None:
+    learning_agent_path = "./experiments/results/pool/dqn_agent_v3.pth"
+
+    version = 4
+    for session in range(sessions):
+        print(f"----------STARTING SESSION {session}-----------")
+        dqn_pool = [f for f in os.listdir("./experiments/results/pool") if ".pth" in f]
+        env = DiscreteHighSocietyEnv()
+        learning_agent = DQNAgent(player_id=0, num_actions=env.num_actions, obs_space=env.observation_space("player_0"), epsilon=0.1)
+        if not os.path.exists(learning_agent_path):
+            raise FileNotFoundError(f"{learning_agent_path} does not exist.")
+        learning_agent.q_net.load_state_dict(torch.load(learning_agent_path))
+        learning_agent = run_self_play(env, learning_agent, dqn_pool, max_steps, training_steps, batch_size)
+        torch.save(learning_agent.q_net.state_dict(), f"./experiments/results/pool/dqn_agent_v{version}.pth")
+        version += 1
+        print(f"----------FINISHED SESSION {session}-----------")
+
+        
 
 def main():
     max_steps = 500
     batch_size = 100
-    training_steps = 10
-    num_sessions = 4000
-    dqn_agent = run_sessions(num_sessions, batch_size, training_steps, max_steps)
-    torch.save(dqn_agent.q_net.state_dict(), "./experiments/results/dqn_agent.pth")
+    training_steps = 100_000
+    num_sessions = 10
+    run_tournament(max_steps, training_steps, batch_size, num_sessions)
+    
+
+    
     
 if __name__ == "__main__":
     main()

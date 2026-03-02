@@ -90,10 +90,10 @@ class DiscreteHighSocietyEnv(AECEnv):
     Cards are only permanently spent when you WIN an auction.
     """
 
-    def __init__(self, num_players: int):
+    def __init__(self, num_players: int = None):
         super().__init__()
         self.name = "discrete_high_society"
-        self.reset(num_players)
+        self.reset(num_players or MAX_NUM_PLAYERS)
 
     def obs_dim(self, agent: str) -> int:
         return sum(space.shape[0] for space in self.observation_space(agent).values())
