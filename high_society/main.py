@@ -292,7 +292,7 @@ def run_self_play(env: DiscreteHighSocietyEnv, learning_agent: DQNAgent, dqn_poo
 
         env.reset(num_players=num_opponents + 1)
         # pick dqn agents with 75% probability
-        num_dqn_agents = np.random.binomial(num_opponents, 0.9)
+        num_dqn_agents = np.random.binomial(num_opponents, 0.5)
         num_random_agents = num_opponents - num_dqn_agents
 
         batch_traj_data: list[dict[str, np.ndarray]] = []

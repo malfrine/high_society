@@ -39,3 +39,5 @@ data/
 
 # Secrets
 .env
+
+node_modules/

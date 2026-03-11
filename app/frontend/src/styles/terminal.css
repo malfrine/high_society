@@ -1,0 +1,442 @@
+:root {
+  --bg: #0a0a0a;
+  --fg: #00ff41;
+  --fg-dim: #006b1a;
+  --gold: #ffcc00;
+  --red: #ff4444;
+  --blue: #4488ff;
+  --white: #cccccc;
+  --border: #1a3a1a;
+  --card-bg: #111;
+  --hover: #0f2f0f;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#root {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+/* --- Lobby --- */
+.lobby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  gap: 24px;
+}
+
+.lobby h1 {
+  font-size: 28px;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 4px;
+}
+
+.lobby-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 320px;
+}
+
+.lobby-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--white);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.lobby-form input,
+.lobby-form select {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+  outline: none;
+}
+
+.lobby-form input:focus,
+.lobby-form select:focus {
+  border-color: var(--fg);
+}
+
+button {
+  background: var(--card-bg);
+  border: 1px solid var(--fg);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 20px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  transition: all 0.15s;
+}
+
+button:hover:not(:disabled) {
+  background: var(--hover);
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --- Game Board --- */
+.game-board {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 20px;
+}
+
+.game-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.game-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --- Auction Card --- */
+.auction-card {
+  border: 1px solid var(--border);
+  padding: 16px;
+  text-align: center;
+}
+
+.auction-card-header {
+  font-size: 12px;
+  color: var(--white);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.auction-card-ascii {
+  font-size: 16px;
+  white-space: pre;
+  line-height: 1.3;
+  margin: 8px 0;
+}
+
+.card-value {
+  color: var(--gold);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.card-special {
+  color: var(--blue);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.auction-info {
+  font-size: 12px;
+  color: var(--white);
+  margin-top: 8px;
+}
+
+/* --- Player Panel --- */
+.player-panel {
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.player-panel.is-human {
+  border-color: var(--fg);
+}
+
+.player-panel.is-current {
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.15);
+}
+
+.player-panel.is-leader {
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgba(255, 204, 0, 0.2);
+}
+
+.player-panel.is-leader .player-name {
+  color: var(--gold);
+}
+
+.player-panel.is-playing-now {
+  border-color: var(--blue);
+  box-shadow: 0 0 12px rgba(68, 136, 255, 0.3);
+  animation: robot-pulse 1s ease-in-out infinite;
+}
+
+@keyframes robot-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(68, 136, 255, 0.2); }
+  50% { box-shadow: 0 0 16px rgba(68, 136, 255, 0.5); }
+}
+
+.player-panel.eliminated {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.player-name {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.player-stats {
+  display: flex;
+  gap: 16px;
+  color: var(--white);
+  font-size: 12px;
+}
+
+.player-stats .prestige {
+  color: var(--gold);
+}
+
+.player-stats .money {
+  color: var(--fg);
+}
+
+.player-bid {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.player-inactive {
+  color: var(--fg-dim);
+  font-style: italic;
+}
+
+/* --- Money Cards (clickable hand) --- */
+.money-cards-section {
+  border: 1px solid var(--border);
+  padding: 16px;
+}
+
+.money-cards-header {
+  font-size: 12px;
+  color: var(--white);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.money-cards-hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.money-card {
+  width: 48px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: default;
+  transition: all 0.15s;
+  position: relative;
+}
+
+.money-card.valid {
+  border-color: var(--fg);
+  cursor: pointer;
+  color: var(--fg);
+}
+
+.money-card.valid:hover {
+  background: var(--hover);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
+  transform: translateY(-2px);
+}
+
+.money-card.in-bid {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: #1a1500;
+}
+
+.money-card.spent {
+  opacity: 0.2;
+  text-decoration: line-through;
+}
+
+.pass-button {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.pass-button.valid {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.pass-button.valid:hover {
+  background: #1a0505;
+  box-shadow: 0 0 10px rgba(255, 68, 68, 0.2);
+}
+
+/* --- Action Log --- */
+.action-log {
+  border: 1px solid var(--border);
+  padding: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.action-log-header {
+  font-size: 12px;
+  color: var(--white);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.action-log-entry {
+  font-size: 12px;
+  padding: 2px 0;
+  color: var(--fg-dim);
+}
+
+.action-log-entry:last-child {
+  color: var(--fg);
+}
+
+.action-log-entry.action-highlight {
+  color: var(--blue);
+  font-weight: 700;
+  animation: entry-flash 0.4s ease-out;
+}
+
+@keyframes entry-flash {
+  0% { background: rgba(68, 136, 255, 0.2); }
+  100% { background: transparent; }
+}
+
+.action-log-round {
+  color: var(--gold);
+  font-weight: 700;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+/* --- Game Over --- */
+.game-over {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 24px;
+  text-align: center;
+}
+
+.game-over h2 {
+  font-size: 24px;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 4px;
+}
+
+.game-over-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 400px;
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.result-row.winner {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.result-row.eliminated {
+  opacity: 0.4;
+  text-decoration: line-through;
+  color: var(--red);
+}
+
+/* --- Loading / Error --- */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 10, 10, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.loading-text {
+  color: var(--fg);
+  font-size: 16px;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.error-banner {
+  background: #1a0505;
+  border: 1px solid var(--red);
+  color: var(--red);
+  padding: 10px 16px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+/* --- Responsive --- */
+@media (max-width: 700px) {
+  .game-board {
+    grid-template-columns: 1fr;
+  }
+
+  .money-card {
+    width: 40px;
+    height: 54px;
+    font-size: 14px;
+  }
+}

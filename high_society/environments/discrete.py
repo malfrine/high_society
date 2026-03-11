@@ -168,15 +168,8 @@ class DiscreteHighSocietyEnv(AECEnv):
         self._select_next_agent()
         self._clear_rewards()
 
-    def reset(self, num_players = None, seed=None, options=None):
-        if seed is not None:
-            random.seed(seed)
-            np.random.seed(seed)
-        if num_players is not None:
-            self.num_players = num_players
-        
-        assert self.num_players is not None
-        assert 3 <= self.num_players <= 5
+    def _build_spaces(self):
+        """Set up observation/action spaces and agent lists for current num_players."""
         self.agents = [f"player_{i}" for i in range(self.num_players)]
         self.possible_agents = self.agents[:]
         self.num_actions = 1 + NUM_MONEY_CARDS  # PASS + 10 money cards
@@ -192,9 +185,7 @@ class DiscreteHighSocietyEnv(AECEnv):
                 "bids": spaces.Box(low=0, high=55, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
                 "current_player_prestige": spaces.Box(low=0, high=100, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
                 "potential_player_prestige": spaces.Box(low=0, high=100, shape=(MAX_NUM_PLAYERS,), dtype=np.float32),
-                # Which money cards the player still has (1 = has, 0 = spent in previous auctions)
                 "available_money_cards": spaces.Box(low=0, high=1, shape=(NUM_MONEY_CARDS,), dtype=np.float32),
-                # Which cards are committed in current bid
                 "cards_in_bid": spaces.Box(low=0, high=1, shape=(NUM_MONEY_CARDS,), dtype=np.float32),
             })
             for agent in self.agents
@@ -203,6 +194,17 @@ class DiscreteHighSocietyEnv(AECEnv):
         self.action_spaces = {
             agent: spaces.Discrete(self.num_actions) for agent in self.agents
         }
+
+    def reset(self, num_players = None, seed=None, options=None):
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+        if num_players is not None:
+            self.num_players = num_players
+
+        assert self.num_players is not None
+        assert 3 <= self.num_players <= 5
+        self._build_spaces()
 
         self.game_state = self._start_game()
         self.game_state.cur_round = self._start_auction_round()
@@ -219,6 +221,27 @@ class DiscreteHighSocietyEnv(AECEnv):
         self._select_first_valid_agent(self.game_state.round_starter_idx)
 
         return self.observe(self.agent_selection), self.infos[self.agent_selection]
+
+    def restore_from_state(self, game_state: GameState, current_agent_idx: int):
+        """Restore the environment from a serialized game state.
+
+        Used by the web API to reconstruct the env from client-owned state.
+        """
+        self.num_players = len(game_state.player_states)
+        self._build_spaces()
+
+        self.game_state = game_state
+
+        self.agents = self.possible_agents[:]
+        self._agent_selector = AgentSelector(self.agents)
+
+        self.rewards = {agent: 0 for agent in self.agents}
+        self._cumulative_rewards = {agent: 0 for agent in self.agents}
+        self.terminations = {agent: False for agent in self.agents}
+        self.truncations = {agent: False for agent in self.agents}
+        self.infos = {agent: {} for agent in self.agents}
+
+        self.agent_selection = self.agents[current_agent_idx]
 
     def render(self):
         raise NotImplementedError()

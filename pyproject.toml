@@ -13,6 +13,8 @@ dependencies = [
     "pettingzoo>=1.25.0",
     "pydantic>=2.12.5",
     "runpod>=1.8.1",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
 ]
 
 [build-system]
